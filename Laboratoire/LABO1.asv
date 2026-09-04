@@ -1,23 +1,86 @@
+clc
+clear all
+close all
 
 % Import des sons
-fprintf('Eagles\n')
-[eagles_48k, Fs1] = audioread('eagles_48k.wav');
-fprintf('yellow_48k\n')
-[yellow_48k, Fs7] = audioread('yellow_48k.wav');
+[sig1, Fe] = audioread('eagles_48k.wav');
+[sig2, Fe] = audioread('yellow_48k.wav');
 
 %Figures de départ
 figure()
 subplot(2,1,1)
-plot(eagles_48k)
+plot(sig1)
 title('Eagles 48k')
 subplot(2,1,2)
-plot(yellow_48k)
+plot(sig2)
 title('Yellow 48k')
+close
 
-FFT_Yellow = fft(yellow_48k)
-FFT_Eagle = fft(eagles_48k)
+%Information
+N_Eagle = length(sig1);
+N_Yellow = length(yellow_48k);
+L = 1024; %Dit dans la question
+LW = 2 * L; %Longueur de la fenetre
+N_trames_Eagle = floor(N_Eagle/L) - 1;
+N_trames_yellow = floor(N_Yellow/L) - 1;
+w = sqrt(hanning(LW));
 
-figure()
-subplot(2,1,1)
+mask_LP = [1 ones(1,LW/4-1) 0 zeros(1, LW/2) ones(1, LW/4-1)];
+mask_HP = 1 - mask_LP;
+    ind_min = floor((300 / Fe) * LW);
+    ind_max = floor((3400 / Fe) * LW);
+    n_ones = ind_max - ind_min + 1;
+mask_BP = zeros(1, LW);
+mask_BP(ind_min: ind_max) = ones(1, n_ones);
+mask_BP(LW - ind_max: LW - ind_min) = ones(1, n_ones);
 
+ptr = 1;
+mem_synthese_Eagle = zeros(1, L);
+mem_synthese_Yellow = zeros(1, L);
+bloc_avant_fft_Eagle = zeros(1, LW);
+bloc_avant_fft_Yellow = zeros(1, LW);
+bloc_apres_ifft_Eagle = zeros(1, LW);
+bloc_apres_ifft_Yellow = zeros(1, LW);
+signal_filtre_Eagle = zeros(1, N_Eagle);
+signal_filtre_Yellow = zeros(1, N_Yellow);
 
+%Pour Yellow
+for trame = 1 : N_trames_yellow
+
+        trame
+
+        new_frame = yellow_48k(ptr : ptr + L-1);
+        bloc_avant_fft_Yellow(end/2+1 : end) = new_frame;
+        xw = bloc_avant_fft_Yellow .* w;
+        Xf = fft(xw);
+
+        Xf_mod = Xf .* mask_BP;
+
+        y = real(ifft(Xf_mod));
+        yw = y .* w;
+        trame_OLA = yw(1 : end/2) + mem_synthese_Yellow;
+        signal_filtre(ptr : ptr + L -1) = trame_OLA;
+
+        mem_synthese_Yellow = yw(end/2+1 : end);
+        bloc_avant_fft_Yellow(1:end/2) = bloc_avant_fft_Yellow(end/2+1:end);
+        ptr = ptr + L;
+end
+
+%Pour Eagle
+for trame = 1 : N_trames_Eagle
+        new_frame = Eagle_48k(ptr : ptr + L-1);
+        bloc_avant_fft_Eagle(end/2+1 : end) = new_frame;
+        xw = bloc_avant_fft_Eagle .* w;
+        Xf = fft(xw);
+
+        Xf_mod = Xf .* mask_BP;
+
+        y = real(ifft(Xf_mod));
+        yw = y .* w;
+        trame_OLA = yw(1 : end/2) + mem_synthese_Eagle;
+        signal_filtre(ptr : ptr + L -1) = trame_OLA;
+
+        mem_synthese_Eagle = yw(end/2+1 : end);
+        bloc_avant_fft_Eagle(1:end/2) = bloc_avant_fft_Eagle(end/2+1:end);
+        ptr = ptr + L;
+end
