@@ -1,0 +1,57 @@
+%% APP 1 Félix Boivin BOIF1302
+%% Clear and Load
+
+clear
+[sig, Fe] = audioread('hel_fr1.wav');
+sig = sig';
+%% Approche LPC
+
+clc
+N          = length(sig);
+L          = 2205;                % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
+LW         = 2 * L;              % Longueur de la fenêtre (chevauchement de 50 %)
+N_trames   = floor(N / L) - 1;    % Nombre de trames
+w          = sqrt(hanning(LW))'; % Fenêtre d'analyse/synthèse COLA
+m          = 16;                 % Ordre LPC (m=10 à 20 recommandé)
+
+ptr            = 1;
+mem_synthese   = zeros(1, L);
+mem_lpc_synth  = zeros(1, m);    % Mémoire des états pour le filtre IIR
+bloc_avant_fft = zeros(1, LW);
+signal_filtre  = zeros(1, N);
+
+% boucle principale
+
+for trame = 1 : N_trames
+
+    % 1. Mise à jour du tampon glissant
+    new_frame = sig(ptr : ptr + L - 1);
+    bloc_avant_fft(1 : end/2) = bloc_avant_fft(end/2+1 : end);
+    bloc_avant_fft(end/2+1 : end) = new_frame;
+    
+    % 2. Fenêtrage d'analyse
+    xw = bloc_avant_fft .* w;
+    
+    % 3. Calcul des coefficients LPC
+    A_LPC = lpc(xw, m);
+    
+    % 4. Extraction du résidu d'excitation e[n] (Filtre FIR d'analyse)
+    e = filter(A_LPC, 1, xw);
+    
+    % --- ICI : Insérer la modification de A_LPC pour la dé-héliumisation ---
+    A_LPC_synth = A_LPC; 
+    
+    % 5. Reconstitution du signal y[n] (Filtre IIR de synthèse tout-pôles)
+    % On conserve l'état mémoire du filtre d'une trame à l'autre pour éviter les discontinuités
+    [y, mem_lpc_synth] = filter(1, A_LPC_synth, e, mem_lpc_synth);
+    
+    % 6. Fenêtrage de synthèse
+    yw = y .* w;
+    
+    % 7. Reconstruction Overlap-And-Add (OLA)
+    trame_OLA = yw(1 : end/2) + mem_synthese;
+    signal_filtre(ptr : ptr + L - 1) = trame_OLA;   
+    mem_synthese = yw(end/2+1 : end);
+    
+    ptr = ptr + L;
+end
