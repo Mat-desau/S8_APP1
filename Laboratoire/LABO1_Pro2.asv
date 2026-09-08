@@ -11,7 +11,7 @@ L = 1024; %Dit dans la question
 N_trames = N/(L - 1);
 w = hanning(L);
 
-m = 40;
+m = 10;
 
 premiere_trame = 50;
 derniere_trame = 80;
@@ -19,9 +19,9 @@ derniere_trame = 80;
 ptr = (premiere_trame-1) * L + 1;
 
 for trame = premiere_trame:derniere_trame
-    x = Sig1(ptr : ptr + L -1);
+    x = sig1(ptr : ptr + L -1);
     xw = x .* w;
-    a = lpc(xw, m)
+    a = lpc(xw, m);
     [H, w_axis] = freqz(1,a,L/2);
     H = H';
     w_axis = w_axis';
@@ -30,15 +30,4 @@ for trame = premiere_trame:derniere_trame
     Xa = Xa(1:L/2);
 
     diff_max = 0;
-
-        figure(1);
-        hold off
-        plot(w_axis, Xa);
-        hold on
-        plot(w_axis, Ha - diff_max, 'r');
-        figure(2);
-        plot(x);
-
-    ptr = ptr + L;
-    pause(1);
-end
+    
