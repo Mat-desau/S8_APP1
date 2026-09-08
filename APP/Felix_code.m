@@ -8,7 +8,8 @@ sig = sig';
 
 clc
 N          = length(sig);
-L          = 50e-3*Fe;                % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
+t_trame    = 50;                % longueur trame (ms)
+L          = t_trame*1e-3*Fe;          % Longueur trame échantillons
 LW         = 2 * L;              % Longueur de la fenêtre (chevauchement de 50 %)
 N_trames   = floor(N / L) - 1;    % Nombre de trames
 w          = sqrt(hanning(LW))'; % Fenêtre d'analyse/synthèse COLA
@@ -23,7 +24,7 @@ signal_filtre  = zeros(1, N);
 
 % boucle principale
 
-for trame = 1 : N_trames
+for trame = 1 : 1 % N_trames
 
     % Trames
     new_frame = sig(ptr : ptr + L - 1);
@@ -36,8 +37,8 @@ for trame = 1 : N_trames
     % Coefficients LPC
     A_LPC = lpc(xw, m);
     
-    % Erreur
-    err = filter(A_LPC, 1, xw);
+    % e[n]
+    e = filter(A_LPC, 1, xw);
 
     % Manipulation des pôles
     p = roots(A_LPC);              % Obtenir les pôles du filtre d'analyse
@@ -51,7 +52,7 @@ for trame = 1 : N_trames
     A_LPC_mod= real(poly(p_mod));
     
     % Reconstitution signal y[n] 
-    [y, mem_lpc_synth] = filter(1, A_LPC_mod, err, mem_lpc_synth);
+    [y, mem_lpc_synth] = filter(1, A_LPC_mod, e, mem_lpc_synth);
     
     % Fenêtrage Hanning 2
     yw = y .* w;
@@ -69,3 +70,6 @@ end
 signal_filtre = signal_filtre / 40000;
 
 sound(signal_filtre, Fe);
+
+%% Approche FFT
+
