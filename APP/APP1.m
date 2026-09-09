@@ -127,13 +127,9 @@ signal_filtre = signal_filtre / max(abs(signal_filtre)) * max(abs(sig));
 % =========================================================
 sig = sig';
 
-ploting_cepstre = true;   % true = affiche l'enveloppe cepstrale à chaque trame
-K = 30;                    % Ordre de troncature cepstrale
-
-kc = 18;
-mask_cepstre = zeros(1, LW);
-mask_cepstre(1 : kc) = 1; 
-mask_cepstre(end - kc + 2 : end) = 1;
+ploting_cepstre = true;     % true = affiche l'enveloppe cepstrale à chaque trame
+K = 30;                     % Ordre de troncature cepstrale
+k = 3;                      % Pour la compression
 
 ptr = 1;
 mem_synthese = zeros(1,L);
@@ -146,38 +142,56 @@ end
 
 % boucle principale
 for trame = 1 : N_trames
-  new_frame = sig(ptr : ptr + L - 1);
-  bloc_avant_fft(end/2+1 : end) = new_frame;
-  
-  xw = bloc_avant_fft .* w;
-  
-  % Premiere FFT
-  Xf = fft(xw);
-  Xf = Xf .* mask_cepstre;
-  Xf_dB = 20 * log10(abs(Xf));
-  
+    new_frame = sig(ptr : ptr + L - 1);
+    bloc_avant_fft(end/2+1 : end) = new_frame;
+    
+    xw = bloc_avant_fft .* w;
+    
+    % Premiere FFT
+    Xf = fft(xw);
+    phase_orig = angle(Xf);
+    Xf_dB = 20 * log10(abs(Xf));
+    
+    % FFT pour enveloppe
+    Xf_mod = fft(Xf_dB);
+    
+    % On ne garde que les premiers et derniers indices (quefrences lentes)
+    kc = 18;
+    mask_cepstre = zeros(1, LW);
+    mask_cepstre(1 : kc) = 1; 
+    mask_cepstre(end - kc + 2 : end) = 1;
+    
+    Xf_mod_dB_mask = Xf_mod .* mask_cepstre;
+    
+    % Comme procedural 2 
+    Y2 = Xf_mod_dB_mask;
+    Y2(K : end-K+1) = 0;
+    Enveloppe = real(ifft(Y2));
+    
+    bloc_avant_fft(1:end/2) = bloc_avant_fft(end/2+1:end);
+    ptr = ptr + L;
+    
+    Enveloppe_temp = [];
+    
+    % Compresssion
+    for i = 1 : LW
+        j = mod(i,k);
+        if j == 0
+            Enveloppe_temp = [Enveloppe_temp, Enveloppe(i)];
+        end
+    end
+    
+    
 
-  % FFT pour enveloppe
-  Xf_mod = fft(Xf_dB);
-
-  % Comme procedural 2 
-  Y2 = Xf_mod;
-  Y2(K : end-K+1) = 0;
-  Envloppe = real(ifft(Y2));
-
-  bloc_avant_fft(1:end/2) = bloc_avant_fft(end/2+1:end);
-  ptr = ptr + L;
-
-  if ploting_cepstre
+    if ploting_cepstre
       hold off
-      plot(Envloppe(1:L/2))
+      plot(Enveloppe_temp(1:L/2))
       hold on
       plot(Xf_dB(1: L/2))
       pause(1)
-  end
+    end
     
 end
 
-fprintf("ici2")
 % sound(signal_filtre, Fe);
 
