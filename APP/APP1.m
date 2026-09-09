@@ -6,6 +6,9 @@ clear
 [sig, Fe] = audioread('hel_fr1.wav');
 sig = sig';
 
+% sound(sig, Fe);
+% pause(5);
+
 %% Approche LPC
 ploting = false;
 
@@ -72,12 +75,12 @@ for trame = 1 : N_trames
     H_dB_c = interp1(idx, H_dB, idx*k, 'linear');
     H_dB_c(isnan(H_dB_c)) = H_dB(end);   % gèle au-delà des données connues (pas d'extrapolation)
 
-    fig3 = figure(3)
-    subplot(2,1,1)
-    plot(w_axis, H_dB)
-    subplot(2,1,2)
-    plot(w_axis, H_dB_c)
-    waitfor(fig3)
+    % fig3 = figure(3)
+    % subplot(2,1,1)
+    % plot(w_axis, H_dB)
+    % subplot(2,1,2)
+    % plot(w_axis, H_dB_c)
+    % waitfor(fig3)
 
 
     % Reconstruction d'un gain symétrique de longueur LW (signal réel)

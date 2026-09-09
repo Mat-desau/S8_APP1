@@ -69,8 +69,16 @@ for trame = 1 : N_trames
 
     % --- Compression de l'enveloppe en fréquence (via freqz), sans toucher F0 ---
     idx = 1:LW/2;
-    H_dB_c = interp1(idx, H_dB, idx*k, 'linear');
+    H_dB_c = interp1(idx, H_dB, idx*k, 'linear')
     H_dB_c(isnan(H_dB_c)) = H_dB(end);   % gèle au-delà des données connues (pas d'extrapolation)
+
+    % fig3 = figure(3)
+    % subplot(2,1,1)
+    % plot(w_axis, H_dB)
+    % subplot(2,1,2)
+    % plot(w_axis, H_dB_c)
+    % waitfor(fig3)
+
 
     % Reconstruction d'un gain symétrique de longueur LW (signal réel)
     H_lin_c  = 10.^(H_dB_c/20);
@@ -125,7 +133,7 @@ sig = sig';
 ploting_cepstre = false;   % true = affiche l'enveloppe (avant/après) à chaque trame
 kc = 18;                  % ordre de liftrage (sépare enveloppe / structure fine)
 %18 pour fr1
-k  = 2.35;                   % facteur de compression d'enveloppe (2 à 3, cf énoncé)
+k  = 2.45;                   % facteur de compression d'enveloppe (2 à 3, cf énoncé)
 %2.35 pour fr1
 
 ptr            = 1;
