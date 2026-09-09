@@ -29,7 +29,6 @@ signal_filtre  = zeros(1, N);
 % =========================================================
 
 for trame = 1 : N_trames
-
     % Trames
     new_frame = sig(ptr : ptr + L - 1);
     trame_analyse(1 : end/2) = trame_analyse(end/2+1 : end);
@@ -119,9 +118,9 @@ end
 signal_filtre = signal_filtre / max(abs(signal_filtre)) * max(abs(sig));
 % max(abs(signal_filtre)) * max(abs(sig));
 % signal_filtre = signal_filtre / 40000;
-fprintf("ici1")
+
 % sound(signal_filtre, Fe);
-% pause(5)
+% pause(1)
 
 % =========================================================
 %    FFT
@@ -129,16 +128,12 @@ fprintf("ici1")
 sig = sig';
 
 ploting_cepstre = true;   % true = affiche l'enveloppe cepstrale à chaque trame
-K = 10;                    % Ordre de troncature cepstrale
+K = 30;                    % Ordre de troncature cepstrale
 
-mask_LP = [1 ones(1,LW/4-1) 0 zeros(1,LW/2) ones(1,LW/4-1)];
-mask_HP = 1 - mask_LP;
-    ind_min = floor((300 / Fe) * LW);
-    ind_max = floor((3400 / Fe) * LW);
-    n_ones = ind_max - ind_min + 1;
-mask_BP = zeros(1,LW);
-mask_BP(ind_min:ind_max) = ones(1,n_ones);
-mask_BP(LW-ind_max:LW-ind_min) = ones(1,n_ones);
+kc = 18;
+mask_cepstre = zeros(1, LW);
+mask_cepstre(1 : kc) = 1; 
+mask_cepstre(end - kc + 2 : end) = 1;
 
 ptr = 1;
 mem_synthese = zeros(1,L);
@@ -151,43 +146,36 @@ end
 
 % boucle principale
 for trame = 1 : N_trames
-    new_frame = sig(ptr : ptr + L - 1);
-    bloc_avant_fft(end/2+1 : end) = new_frame;
+  new_frame = sig(ptr : ptr + L - 1);
+  bloc_avant_fft(end/2+1 : end) = new_frame;
+  
+  xw = bloc_avant_fft .* w;
+  
+  % Premiere FFT
+  Xf = fft(xw);
+  Xf = Xf .* mask_cepstre;
+  Xf_dB = 20 * log10(abs(Xf));
+  
 
-    % Fenêtrage
-    xw = bloc_avant_fft .* w;
+  % FFT pour enveloppe
+  Xf_mod = fft(Xf_dB);
 
-    % FFT (une seule fois, la phase est conservée pour la resynthèse)
-    Xf = fft(xw);
+  % Comme procedural 2 
+  Y2 = Xf_mod;
+  Y2(K : end-K+1) = 0;
+  Envloppe = real(ifft(Y2));
 
-    % --- Visualisation optionnelle de l'enveloppe cepstrale ---
-    if ploting_cepstre
-        Xa = abs(Xf);
-        Y2 = fft(Xa);
-        Y2(K : end-K+2) = 0;   % on garde seulement les basses "quéfrences"
-        E  = real(ifft(Y2));
+  bloc_avant_fft(1:end/2) = bloc_avant_fft(end/2+1:end);
+  ptr = ptr + L;
 
-        figure(2)
-        hold on
-        plot(abs(E(1 : end/2)));
-        title(sprintf('Enveloppe cepstrale - Trame %d, K = %d', trame, K));
-        xlabel('Échantillons'); ylabel('|E|');
-        ylim([0, max(abs(E))*1.1 + eps]);
-        drawnow;
-        pause(0.05);
-    end
-
-    % --- Filtrage réel (masquage + resynthèse) ---
-    Xf_mod = Xf .* mask_HP;     % on modifie le spectre ici
-
-    y = real(ifft(Xf_mod));
-    yw = y .* w;
-    trame_OLA = yw(1 : end/2) + mem_synthese;
-    signal_filtre(ptr : ptr + L - 1) = trame_OLA;
-    mem_synthese = yw(end/2+1 : end);
-
-    bloc_avant_fft(1 : end/2) = bloc_avant_fft(end/2+1 : end);
-    ptr = ptr + L;
+  if ploting_cepstre
+      hold off
+      plot(Envloppe(1:L/2))
+      hold on
+      plot(Xf_dB(1: L/2))
+      pause(1)
+  end
+    
 end
 
 fprintf("ici2")
