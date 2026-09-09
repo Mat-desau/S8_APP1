@@ -7,14 +7,16 @@ sig = sig';
 
 %% Approche LPC
 
+ploting = false;
+
 clc
 N          = length(sig);
-L          = 50e-3*Fe;           % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
+L          = 2*round(50e-3*Fe/2);           % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
 LW         = 2 * L;              % Longueur de la fenêtre (chevauchement de 50 %)
 N_trames   = floor(N / L) - 1;   % Nombre de trames
 w          = sqrt(hanning(LW))'; % Fenêtre d'analyse/synthèse COLA
 m          = 20;                 % Ordre LPC (m=10 à 20 recommandé)
-k          = 2.25;
+k          = 2.15;
 
 ptr            = 1;
 mem_synthese   = zeros(1, L);
@@ -22,26 +24,46 @@ mem_lpc_synth  = zeros(1, m);    % Mémoire des états pour le filtre IIR
 trame_analyse  = zeros(1, LW);
 signal_filtre  = zeros(1, N);
 
-% boucle principale
+% =========================================================
+%    LPC
+% =========================================================
 
 for trame = 1 : N_trames
-
     % Trames
     new_frame = sig(ptr : ptr + L - 1);
     trame_analyse(1 : end/2) = trame_analyse(end/2+1 : end);
     trame_analyse(end/2+1 : end) = new_frame;
-    
+
     % Fenêtrage Hanning
     xw = trame_analyse .* w;
-    
+
     % Coefficients LPC
     A_LPC = lpc(xw, m);
+    if ploting
+        %Pour grahique initiale
+        [H,w_axis] = freqz(1,A_LPC,LW/2);
+        H          = H';
+        w_axis     = w_axis';
+        Ha         = 20*log10(abs(H));
+        Xa         = 20*log10(abs(fft(xw)));
+        Xa         = Xa(1:LW/2);
+        diff_max   = 0;
 
-    [H, w_axis] = freqz(1, A_LPC, L/2); %Pour graphique
-   
-    
+            figure(1)
+            subplot(4,1,1)
+            hold off
+            plot(w_axis, Xa);
+            hold on
+            plot(w_axis,Ha - diff_max,'r')
+            title("Avant")
+            subplot(4,1,2)
+            plot(new_frame)
+            title("Signal Avant")
+    end
+
     % Erreur
     err = filter(A_LPC, 1, xw);
+
 
     % Manipulation des pôles
     p = roots(A_LPC);              % Obtenir les pôles du filtre d'analyse
@@ -53,26 +75,107 @@ for trame = 1 : N_trames
     p_mod = r .* exp(1i * theta_mod);
 
     A_LPC_mod= real(poly(p_mod));
-    
+
     % Reconstitution signal y[n] 
     [y, mem_lpc_synth] = filter(1, A_LPC_mod, err, mem_lpc_synth);
-    
+
     % Fenêtrage Hanning 2
     yw = y .* w;
-    
+
     % OLA
     trame_OLA = yw(1 : end/2) + mem_synthese;
     signal_filtre(ptr : ptr + L - 1) = trame_OLA;   
     mem_synthese = yw(end/2+1 : end);
-    
+
+    %Pour grahique initiale
+    if ploting
+        [H2,w_axis2] = freqz(1,A_LPC_mod,LW/2);
+        H2          = H2';
+        w_axis2     = w_axis2';
+        Ha2         = 20*log10(abs(H2));
+        Xa2         = 20*log10(abs(fft(yw)));
+        Xa2         = Xa2(1:LW/2);
+        diff_max   = 0;
+
+            subplot(4,1,3)
+            hold off
+            plot(w_axis2, Xa2);
+            hold on
+            plot(w_axis2,Ha2 - diff_max,'r')
+            title("LPC Apres")
+            subplot(4,1,4)
+            plot(mem_synthese)
+            title("Signal apres LPC")
+    end
+
     ptr = ptr + L;
+
+    if ploting
+        pause(1);
+    end
 end
 
 signal_filtre = signal_filtre / max(abs(signal_filtre)) * max(abs(sig));
 % max(abs(signal_filtre)) * max(abs(sig));
 % signal_filtre = signal_filtre / 40000;
 
-figure()
-plot(abs(fft(sig)), w_axis)
+% sound(signal_filtre, Fe);
+% pause(1)
 
-%sound(signal_filtre, Fe);
+% =========================================================
+%    FFT
+% =========================================================
+sig = sig';
+
+ploting_cepstre = true;   % true = affiche l'enveloppe cepstrale à chaque trame
+K = 30;                    % Ordre de troncature cepstrale
+
+kc = 18;
+mask_cepstre = zeros(1, LW);
+mask_cepstre(1 : kc) = 1; 
+
+ptr = 1;
+mem_synthese = zeros(1,L);
+bloc_avant_fft = zeros(1,LW);
+signal_filtre = zeros(1,N);
+
+if ploting_cepstre
+    figure(2)
+end
+
+% boucle principale
+for trame = 1 : N_trames
+  new_frame = sig(ptr : ptr + L - 1);
+  bloc_avant_fft(end/2+1 : end) = new_frame;
+  
+  xw = bloc_avant_fft .* w;
+  
+  % Premiere FFT
+  Xf = fft(xw);
+  Xf_dB = 20 * log10(abs(Xf));
+  Xf_dB = Xf_dB .* mask_LP;
+
+  % FFT pour enveloppe
+  Xf_mod = fft(Xf_dB);
+
+  % Comme procedural 2 
+  Y2 = Xf_mod;
+  Y2(K : end-K+1) = 0;
+  Envloppe = real(ifft(Y2));
+
+  bloc_avant_fft(1:end/2) = bloc_avant_fft(end/2+1:end);
+  ptr = ptr + L;
+
+  if ploting_cepstre
+      hold off
+      plot(Envloppe(1:L/2))
+      hold on
+      plot(Xf_dB(1: L/2))
+      pause(1)
+  end
+    
+end
+
+fprintf("ici2")
+% sound(signal_filtre, Fe);
+
