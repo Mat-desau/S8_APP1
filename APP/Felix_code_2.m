@@ -1,19 +1,24 @@
+%% APP 1 
+% Félix Boivin BOIF1302
+% Mathieu Desautels DESM1210
 %% Clear and Load
-
 clear
 [sig, Fe] = audioread('hel_fr1.wav');
 sig = sig';
 
 %% Approche LPC
+ploting = false;
 
 clc
 N          = length(sig);
-L          = 50e-3*Fe;           % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
-LW         = 2 * L;              % Longueur de la fenêtre (chevauchement de 50 %)
-N_trames   = floor(N / L) - 1;   % Nombre de trames
-w          = sqrt(hanning(LW))'; % Fenêtre d'analyse/synthèse COLA
-m          = 20;                 % Ordre LPC (m=10 à 20 recommandé)
-k          = 2;
+L          = 2*round(50e-3*Fe/2);           % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
+LW         = 2 * L;                 % Longueur de la fenêtre (chevauchement de 50 %)
+N_trames   = floor(N / L) - 1;      % Nombre de trames
+w          = sqrt(hanning(LW))';    % Fenêtre d'analyse/synthèse COLA
+m          = 20;                    % Ordre LPC (m=10 à 20 recommandé)
+%20 pour fr1
+k          = 2.7;
+%2.7 pour fr1
 
 ptr            = 1;
 mem_synthese   = zeros(1, L);
@@ -21,7 +26,9 @@ mem_lpc_synth  = zeros(1, m);    % Mémoire des états pour le filtre IIR
 trame_analyse  = zeros(1, LW);
 signal_filtre  = zeros(1, N);
 
-% boucle principale
+% =========================================================
+%    LPC Prise 2
+% =========================================================
 
 for trame = 1 : N_trames
 
@@ -29,60 +36,214 @@ for trame = 1 : N_trames
     new_frame = sig(ptr : ptr + L - 1);
     trame_analyse(1 : end/2) = trame_analyse(end/2+1 : end);
     trame_analyse(end/2+1 : end) = new_frame;
-    
+
     % Fenêtrage Hanning
     xw = trame_analyse .* w;
-    
+
     % Coefficients LPC
     A_LPC = lpc(xw, m);
-    
-    % Erreur
+
+    % Réponse en fréquence de l'enveloppe LPC
+    [H, w_axis] = freqz(1, A_LPC, LW/2);
+    H = H'; 
+    w_axis = w_axis';
+    H_dB = 20*log10(abs(H));
+
+    if ploting
+        Xa = 20*log10(abs(fft(xw)));
+        Xa = Xa(1:LW/2);
+        fig = figure(1);
+        subplot(4,1,1); 
+        hold off; 
+        plot(w_axis, Xa); 
+        hold on; 
+        plot(w_axis, H_dB, 'r');
+        title("Avant")
+        subplot(4,1,2); 
+        plot(new_frame); 
+        title("Signal Avant")
+    end
+
+    % Résidu d'excitation — contient le pitch/les harmoniques, JAMAIS modifié
     err = filter(A_LPC, 1, xw);
 
-    % Modification
-    [h,wf] = freqz(1,A_LPC,L);
-    mag = abs(h);
-    phase = angle(h)
-    w_comp = wf/k;
-    mag_mod = interp1(w_comp, mag, wf);
-    phase_mod = interp1(w_comp, phase, wf);
-
-    H_demi = mag_mod .* exp(1i * phase_mod);
-    H_complet = [H_demi; conj(H_demi(end-1 :-1 : 2))];
-
-    h_temporel = real(ifft(H_complet));
-    h_temporel = h_temporel';
+    % --- Compression de l'enveloppe en fréquence (via freqz), sans toucher F0 ---
+    idx = 1:LW/2;
+    H_dB_c = interp1(idx, H_dB, idx*k, 'linear');
+    H_dB_c(isnan(H_dB_c)) = H_dB(end);   % gèle au-delà des données connues (pas d'extrapolation)
 
 
-    y = filter(h_temporel, 1, err);
-    
-    
+    % Reconstruction d'un gain symétrique de longueur LW (signal réel)
+    H_lin_c  = 10.^(H_dB_c/20);
+    H_full   = [H_lin_c, fliplr(H_lin_c)];
+    H_full   = H_full(1:LW);             % ajuste au cas où l'assemblage dépasse LW
+
+    % --- Application de l'enveloppe comprimée sur le spectre du résidu ---
+    Err_f = fft(err);
+    Y_f   = Err_f .* H_full;    % gain d'enveloppe seulement ; phase du résidu intacte
+    y     = real(ifft(Y_f));
+
     % Fenêtrage Hanning 2
     yw = y .* w;
-    
+
     % OLA
     trame_OLA = yw(1 : end/2) + mem_synthese;
-    signal_filtre(ptr : ptr + L - 1) = trame_OLA;   
+    signal_filtre(ptr : ptr + L - 1) = trame_OLA;
     mem_synthese = yw(end/2+1 : end);
+
+    if ploting
+        Xa2 = 20*log10(abs(fft(yw)));
+        Xa2 = Xa2(1:LW/2);
+        subplot(4,1,3); 
+        hold off; 
+        plot(w_axis, Xa2); 
+        hold on; 
+        plot(w_axis, H_dB_c, 'r');
+        title("LPC Apres")
+        subplot(4,1,4); 
+        plot(mem_synthese); 
+        title("Signal apres LPC")
+    end
+
     ptr = ptr + L;
-
-    fig = figure(1);
-    subplot(2,1,1);
-    plot(mag);
-    subplot(2,1,2);
-    plot(mag_mod);
-
-    fig = figure(2);
-    subplot(2,1,1);
-    plot(mag);
-    subplot(2,1,2);
-    plot(mag_mod);
-
-    waitfor(fig);
+    if ploting
+        waitfor(fig);
+    end
 end
 
 signal_filtre = signal_filtre / max(abs(signal_filtre)) * max(abs(sig));
 % max(abs(signal_filtre)) * max(abs(sig));
 % signal_filtre = signal_filtre / 40000;
+% sound(signal_filtre, Fe);
 
+% SAW Pré-traitement
+alpha = 0.5;
+fctr_down_sample = 3;
+
+signal_downsample = decimate(signal_filtre, fctr_down_sample);
+
+S_k = fft(signal_downsample);
+Sw_k = S_k.*(abs(S_k.^alpha)./abs(S_k));
+Sw_n = real(ifft(Sw_k));
+
+Swq_n = quant_scal_unif(Sw_n, min(Sw_n), max(Sw_n), 6);
+
+figure
+plot(Swq_n)
+
+Swq_k = fft(Swq_n);
+
+Sq_k = Swq_k.*(abs(Swq_k.^(1/alpha))./abs(Swq_k));
+Sq_n = real(ifft(Sq_k));
+
+sound(Sq_n, Fe/down_sample);
+
+
+%% Approche FFT / Cepstrale
+ploting = false;
+
+N          = length(sig);
+L          = 2 * round(50e-3 * Fe / 2);  % Longueur de trame (50 ms)
+LW         = 2 * L;                      % Longueur de la fenêtre (4410 à 44.1 kHz)
+N_trames   = floor(N / L) - 1;           
+w          = sqrt(hanning(LW))';         % Fenêtre COLA
+k          = 2.6;                        % Facteur de compression des formants (ex: 2.7)
+
+% Paramètre Cepstral : coupure quefrentielle (kc)
+% Pour LW = 4410, kc = 18 à 22 isole l'enveloppe en ignorant F0
+kc         = 20; 
+mask_cepstre = zeros(1, LW);
+mask_cepstre(1 : kc) = 1;
+mask_cepstre(end - kc + 2 : end) = 1;
+
+ptr            = 1;
+mem_synthese   = zeros(1, L);
+trame_analyse  = zeros(1, LW);
+signal_filtre  = zeros(1, N);
+
+% Axe de fréquence pour affichage
+w_axis = (0 : LW/2 - 1) * (Fe / LW);
+
+% =========================================================
+%    Boucle principale FFT / Cepstre
+% =========================================================
+for trame = 1 : N_trames
+    % 1. Mise à jour du tampon de trame
+    new_frame = sig(ptr : ptr + L - 1);
+    trame_analyse(1 : end/2) = trame_analyse(end/2+1 : end);
+    trame_analyse(end/2+1 : end) = new_frame;
+    
+    % 2. Fenêtrage Hanning
+    xw = trame_analyse .* w;
+    
+    % 3. Passage dans le domaine fréquentiel (FFT)
+    Xf = fft(xw);
+    mag_X = abs(Xf) + 1e-6;
+    
+    % 4. Extraction de l'enveloppe spectrale E(f) par le Cepstre
+    log_abs_X = log(mag_X); 
+    cepstre   = fft(log_abs_X);
+    cep_pb    = cepstre .* mask_cepstre; % Isolation des basses quefrences
+    
+    log_E = real(ifft(cep_pb));
+    E     = exp(log_E);                  % Enveloppe spectrale lissée
+    
+    % 5. Isolation de l'excitation spectrale (Pitch/Harmoniques = X / E)
+    Excitation = Xf ./ E;
+    
+    % 6. Compression de l'enveloppe E en dB (Demi-spectre)
+    E_dB   = 20 * log10(E(1 : LW/2));
+    idx    = 1 : LW/2;
+    
+    E_dB_c = interp1(idx, E_dB, idx * k, 'linear');
+    E_dB_c(isnan(E_dB_c)) = E_dB(end);   % Maintien du niveau en haute fréquence
+    
+    % 7. Reconstruction du gain d'enveloppe comprimé
+    E_lin_c = 10.^(E_dB_c / 20);
+    E_full  = [E_lin_c, fliplr(E_lin_c)];
+    E_full  = E_full(1 : LW);            % Ajustement à la taille LW
+    
+    % 8. Recomposition : Excitation originale * Enveloppe modifiée
+    Y_f = Excitation .* E_full;
+    y   = real(ifft(Y_f));
+    
+    % 9. Fenêtrage de synthèse + Overlap-Add (OLA)
+    yw = y .* w;
+    trame_OLA = yw(1 : end/2) + mem_synthese;
+    signal_filtre(ptr : ptr + L - 1) = trame_OLA;
+    mem_synthese = yw(end/2+1 : end);
+    
+    % Affichage optionnel
+    if ploting
+        fig = figure(1);
+        
+        % Avant traitement
+        subplot(4,1,1); 
+        plot(w_axis, 20*log10(mag_X(1:LW/2))); hold on;
+        plot(w_axis, E_dB, 'r', 'LineWidth', 1.5); hold off;
+        title("Spectre FFT brut et Enveloppe Cepstrale E(f)");
+        
+        subplot(4,1,2); 
+        plot(new_frame); title("Signal temporel entrant");
+        
+        % Après traitement
+        subplot(4,1,3); 
+        plot(w_axis, 20*log10(abs(Y_f(1:LW/2)))); hold on;
+        plot(w_axis, E_dB_c, 'r', 'LineWidth', 1.5); hold off;
+        title("Spectre modifié avec Enveloppe compressée");
+        
+        subplot(4,1,4); 
+        plot(mem_synthese); title("Mémoire OLA");
+        
+        waitfor(fig);
+    end
+    
+    ptr = ptr + L;
+end
+
+% Normalisation d'amplitude finale
+signal_filtre = signal_filtre / max(abs(signal_filtre)) * max(abs(sig));
+
+% Écoute du résultat
 sound(signal_filtre, Fe);
+
