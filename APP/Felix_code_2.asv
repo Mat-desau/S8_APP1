@@ -8,7 +8,6 @@ sig = sig';
 
 %% Approche LPC
 ploting = false;
-shortcut = false;
 
 clc
 N          = length(sig);
@@ -18,7 +17,7 @@ N_trames   = floor(N / L) - 1;      % Nombre de trames
 w          = sqrt(hanning(LW))';    % Fenêtre d'analyse/synthèse COLA
 m          = 20;                    % Ordre LPC (m=10 à 20 recommandé)
 %20 pour fr1
-k          = 2.7;
+k          = 3;
 %2.7 pour fr1
 
 ptr            = 1;
@@ -79,16 +78,19 @@ for trame = 1 : N_trames
         % Reconstruction d'un gain symétrique de longueur LW (signal réel)
         H_full   = [H_lin_c, fliplr(H_lin_c)];
         H_full   = H_full(1:LW);             % ajuste au cas où l'assemblage dépasse LW
-
-        % % --- Application de l'enveloppe comprimée sur le spectre du résidu ---
-        Err_f    = fft(err);
-        Y_f      = Err_f .* H_full;    % gain d'enveloppe seulement ; phase du résidu intacte
-        y        = real(ifft(Y_f));
-    else
-        R_mod = real(ifft(abs(H_lin_c).^2, LW));
-        A_mod = levinson(R_mod, m);
-        y = filter(1, A_mod, err);
     end
+
+    
+
+    R_mod = real(ifft(abs(H_lin_c).^2, LW));
+    A_mod = levinson(R_mod, m);
+
+    % % --- Application de l'enveloppe comprimée sur le spectre du résidu ---
+    % Err_f = fft(err);
+    % Y_f   = Err_f .* H_full;    % gain d'enveloppe seulement ; phase du résidu intacte
+    % y     = real(ifft(Y_f));
+
+    y = filter(1, A_mod, err);
 
     % Fenêtrage Hanning 2
     yw = y .* w;
