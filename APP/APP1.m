@@ -46,7 +46,7 @@ for trame = 1 : N_trames
     % Coefficients LPC
     A_LPC = lpc(xw, m);
 
-    % Réponse en fréquence de l'enveloppe LPC (demandée par le prof)
+    % Réponse en fréquence de l'enveloppe LPC
     [H, w_axis] = freqz(1, A_LPC, LW/2);
     H = H'; 
     w_axis = w_axis';
@@ -68,7 +68,7 @@ for trame = 1 : N_trames
     end
 
     % Résidu d'excitation — contient le pitch/les harmoniques, JAMAIS modifié
-    err = filter(A_LPC, 1, xw);
+    Residus = filter(A_LPC, 1, xw);
 
     % --- Compression de l'enveloppe en fréquence (via freqz), sans toucher F0 ---
     idx = 1:LW/2;
@@ -81,7 +81,7 @@ for trame = 1 : N_trames
     H_full   = H_full(1:LW);             % ajuste au cas où l'assemblage dépasse LW
 
     % --- Application de l'enveloppe comprimée sur le spectre du résidu ---
-    Err_f = fft(err);
+    Err_f = fft(Residus);
     Y_f   = Err_f .* H_full;    % gain d'enveloppe seulement ; phase du résidu intacte
     y     = real(ifft(Y_f));
 
@@ -222,6 +222,8 @@ downsample = 3;
 Res_signal_filtre_FFT = decimate(signal_filtre_FFT, downsample);
 Res_signal_filtre_LPC = decimate(signal_filtre_LPC, downsample);
 
+Len = length(Res_signal_filtre_LPC);
+
 S = fft(Res_signal_filtre_LPC);
 Alpha = 0.5;
 
@@ -235,7 +237,18 @@ Sc = Sw_c .* ((abs(Sw_c).^(1/Alpha))./abs(Sw_c));
 Sig_synthese = real(ifft(Sc));
 
 sound(Sig_synthese, Fe/3)
- 
+
+% figure
+% subplot(3,1,1)
+% plot(Sig_saw, 'r')
+% title("Après transformation non-linéaire")
+% subplot(3,1,2)
+% plot(Swq_k, 'b')
+% title("Après quantification")
+% subplot(3,1,3)
+% plot(Sig_synthese, 'w')
+% title("Après transformation non-linéaire inverse")
+% 
 %% ===================== Fonctions locales =====================
 function [y, ind] = quant_scal_unif(x, val_min, val_max, n_bits)
 
