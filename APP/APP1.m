@@ -61,10 +61,10 @@ for trame = 1 : N_trames
         plot(w_axis, Xa); 
         hold on; 
         plot(w_axis, H_dB, 'r');
-        title("Avant")
+        title("FFT départ avec enveloppe")
         subplot(4,1,2); 
         plot(new_frame); 
-        title("Signal Avant")
+        title("Signal temporel départ")
     end
 
     % Résidu d'excitation — contient le pitch/les harmoniques, JAMAIS modifié
@@ -101,10 +101,10 @@ for trame = 1 : N_trames
         plot(w_axis, Xa2); 
         hold on; 
         plot(w_axis, H_dB_c, 'r');
-        title("LPC Apres")
+        title("FFT après LPC")
         subplot(4,1,4); 
         plot(mem_synthese); 
-        title("Signal apres LPC")
+        title("Signal temporel après LPC")
     end
 
     ptr = ptr + L;
@@ -126,11 +126,9 @@ pause(5)
 % =========================================================
 sig = sig';
 
-ploting_cepstre = false;   % true = affiche l'enveloppe (avant/après) à chaque trame
+ploting_cepstre = true;   % true = affiche l'enveloppe (avant/après) à chaque trame
 kc = 31;                  % ordre de liftrage (sépare enveloppe / structure fine)
-%18 pour fr1
 k  = 2.7;                   % facteur de compression d'enveloppe (2 à 3, cf énoncé)
-%2.35 pour fr1
 
 ptr            = 1;
 mem_synthese   = zeros(1, L);
@@ -139,10 +137,7 @@ signal_filtre_FFT  = zeros(1, N);
 
 half = LW/2;
 idx  = 0:half;   % axe de fréquence (indices) pour la demi-bande [0, Nyquist]
-
-if ploting_cepstre
-    figure(2)
-end
+w_axis_fft = (0:LW/2-1) * (2*pi/LW); % même convention d'axe que freqz (0 à pi), pour comparer avec le LPC
 
 % boucle principale
 for trame = 1 : N_trames
@@ -165,6 +160,19 @@ for trame = 1 : N_trames
 
     env_dB  = real(fft(cep_env));        % enveloppe (dB), fonction de la fréquence
     fine_dB = Xf_dB - env_dB;            % structure fine = tout le reste (harmoniques)
+
+    if ploting_cepstre
+        fig = figure(2);
+        subplot(4,1,1)
+        hold off
+        plot(w_axis_fft, Xf_dB(1:LW/2));
+        hold on
+        plot(w_axis_fft, env_dB(1:LW/2), 'r');
+        title("FFT départ avec enveloppe")
+        subplot(4,1,2)
+        plot(new_frame);
+        title("Signal temporel départ")
+    end
 
     % --- Compression de l'enveloppe par facteur k ---
     % env_comprimee(f) = env_recue(f * k)  ->  ramène les formants étirés
@@ -193,14 +201,18 @@ for trame = 1 : N_trames
 
     % --- Affichage optionnel ---
     if ploting_cepstre
+        Xa2 = 20*log10(abs(fft(yw)) + eps);
+        subplot(4,1,3)
         hold off
-        plot(env_dB(1:half));
+        plot(w_axis_fft, Xa2(1:LW/2));
         hold on
-        plot(env_dB_c(1:half), 'r');
-        legend('Enveloppe avant', 'Enveloppe comprimée');
-        title(sprintf('Trame %d / %d', trame, N_trames));
-        drawnow;
-        pause(0.05);
+        plot(w_axis_fft, env_dB_c(1:LW/2), 'r');
+        title("FFT après FFT")
+        subplot(4,1,4)
+        plot(mem_synthese);
+        title("Signal temporel après FFT")
+
+        waitfor(fig);
     end
 end
 signal_filtre_FFT = signal_filtre_FFT / max(abs(signal_filtre_FFT)) * max(abs(sig));
