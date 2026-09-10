@@ -6,8 +6,8 @@ clear
 [sig, Fe] = audioread('hel_fr1.wav');
 sig = sig';
 
-sound(sig, Fe);
-pause(5);
+% sound(sig, Fe);
+% pause(5);
 
 %% Approche LPC
 ploting = false;
@@ -30,7 +30,7 @@ trame_analyse  = zeros(1, LW);
 signal_filtre_LPC  = zeros(1, N);
 
 % =========================================================
-%    LPC Prise 2
+%    LPC
 % =========================================================
 
 for trame = 1 : N_trames
@@ -114,8 +114,6 @@ for trame = 1 : N_trames
 end
 
 signal_filtre_LPC = signal_filtre_LPC / max(abs(signal_filtre_LPC)) * max(abs(sig));
-% max(abs(signal_filtre)) * max(abs(sig));
-% signal_filtre = signal_filtre / 40000;
 
 sound(signal_filtre_LPC, Fe);
 pause(5)
@@ -126,7 +124,7 @@ pause(5)
 % =========================================================
 sig = sig';
 
-ploting_cepstre = true;   % true = affiche l'enveloppe (avant/après) à chaque trame
+ploting_cepstre = false;  
 kc = 31;                  % ordre de liftrage (sépare enveloppe / structure fine)
 k  = 2.7;                   % facteur de compression d'enveloppe (2 à 3, cf énoncé)
 
@@ -136,8 +134,8 @@ bloc_avant_fft = zeros(1, LW);
 signal_filtre_FFT  = zeros(1, N);
 
 half = LW/2;
-idx  = 0:half;   % axe de fréquence (indices) pour la demi-bande [0, Nyquist]
-w_axis_fft = (0:LW/2-1) * (2*pi/LW); % même convention d'axe que freqz (0 à pi), pour comparer avec le LPC
+idx  = 0:half;
+w_axis_fft = (0:LW/2-1) * (2*pi/LW);
 
 % boucle principale
 for trame = 1 : N_trames
@@ -175,9 +173,6 @@ for trame = 1 : N_trames
     end
 
     % --- Compression de l'enveloppe par facteur k ---
-    % env_comprimee(f) = env_recue(f * k)  ->  ramène les formants étirés
-    % vers leur position d'origine, sans extrapoler au-delà des données
-    % connues (on gèle au dernier niveau valide plutôt que d'inventer une pente).
     env_half   = env_dB(1:half+1);
     env_half_c = interp1(idx, env_half, idx*k, 'linear');
     env_half_c(isnan(env_half_c)) = env_half(end);
