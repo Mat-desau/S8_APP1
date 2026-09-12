@@ -14,24 +14,22 @@ ploting = false;
 
 clc
 N          = length(sig);
-L          = 2*round(50e-3*Fe/2);           % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
+L          = 2*round(50e-3*Fe/2);   % Longueur d'une trame (50 ms à Fe = 44.1 kHz)
 LW         = 2 * L;                 % Longueur de la fenêtre (chevauchement de 50 %)
 N_trames   = floor(N / L) - 1;      % Nombre de trames
-w          = sqrt(hanning(LW))';    % Fenêtre d'analyse/synthèse COLA
-m          = 20;                    % Ordre LPC (m=10 à 20 recommandé)
+w          = sqrt(hanning(LW))';    % Fenêtre d'analyse/synthèse OLA
+m          = 20;                    % Ordre LPC
 %20 pour fr1
 k          = 2.7;
 %2.7 pour fr1
 
 ptr            = 1;
 mem_synthese   = zeros(1, L);
-mem_lpc_synth  = zeros(1, m);    % Mémoire des états pour le filtre IIR
+mem_lpc_synth  = zeros(1, m);   
 trame_analyse  = zeros(1, LW);
 signal_filtre_LPC  = zeros(1, N);
 
-% =========================================================
-%    LPC
-% =========================================================
+
 
 for trame = 1 : N_trames
 
@@ -46,7 +44,7 @@ for trame = 1 : N_trames
     % Coefficients LPC
     A_LPC = lpc(xw, m);
 
-    % Réponse en fréquence de l'enveloppe LPC
+    % Enveloppe
     [H, w_axis] = freqz(1, A_LPC, LW/2);
     H = H'; 
     w_axis = w_axis';
@@ -67,25 +65,25 @@ for trame = 1 : N_trames
         title("Signal temporel départ")
     end
 
-    % Résidu d'excitation — contient le pitch/les harmoniques, JAMAIS modifié
+    % Residu excitation
     Residus = filter(A_LPC, 1, xw);
 
-    % --- Compression de l'enveloppe en fréquence (via freqz), sans toucher F0 ---
+    % Compression enveloppe
     idx = 1:LW/2;
     H_dB_c = interp1(idx, H_dB, idx*k, 'linear');
-    H_dB_c(isnan(H_dB_c)) = H_dB(end);   % gèle au-delà des données connues (pas d'extrapolation)
+    H_dB_c(isnan(H_dB_c)) = H_dB(end);   
 
-    % Reconstruction d'un gain symétrique de longueur LW (signal réel)
+    % Reconstruction enveloppe symetrique
     H_lin_c  = 10.^(H_dB_c/20);
     H_full   = [H_lin_c, fliplr(H_lin_c)];
-    H_full   = H_full(1:LW);             % ajuste au cas où l'assemblage dépasse LW
+    H_full   = H_full(1:LW);             
 
-    % --- Application de l'enveloppe comprimée sur le spectre du résidu ---
+    % Application nouvelle enveloppe
     Err_f = fft(Residus);
-    Y_f   = Err_f .* H_full;    % gain d'enveloppe seulement ; phase du résidu intacte
+    Y_f   = Err_f .* H_full;    
     y     = real(ifft(Y_f));
 
-    % Fenêtrage Hanning 2
+    % Fenetrage Hanning 2
     yw = y .* w;
 
     % OLA
@@ -118,15 +116,13 @@ signal_filtre_LPC = signal_filtre_LPC / max(abs(signal_filtre_LPC)) * max(abs(si
 sound(signal_filtre_LPC, Fe);
 pause(5)
 
-%% FFT
-% =========================================================
-%    FFT - Compression d'enveloppe spectrale
-% =========================================================
+%% Approche FFT
+
 sig = sig';
 
 ploting_cepstre = false;  
-kc = 31;                  % ordre de liftrage (sépare enveloppe / structure fine)
-k  = 2.7;                   % facteur de compression d'enveloppe (2 à 3, cf énoncé)
+kc = 31;                  
+k  = 2.7;                  
 
 ptr            = 1;
 mem_synthese   = zeros(1, L);
@@ -140,24 +136,24 @@ w_axis_fft = (0:LW/2-1) * (2*pi/LW);
 % boucle principale
 for trame = 1 : N_trames
 
-    % --- Trames ---
+    % Trames
     new_frame = sig(ptr : ptr + L - 1);
     bloc_avant_fft(end/2+1 : end) = new_frame;
     xw = bloc_avant_fft .* w;
 
-    % --- Analyse ---
+    % Analyse
     Xf         = fft(xw);
-    phase_orig = angle(Xf);              % phase sauvegardée pour la resynthèse
+    phase_orig = angle(Xf);              
     Xf_dB      = 20.*log10(abs(Xf));
 
-    % --- Séparation enveloppe / structure fine (cepstre / liftrage) ---
+    % Masque cepstral
     cep     = ifft(Xf_dB);
     cep_env = zeros(1, LW);
     cep_env(1:kc)         = cep(1:kc);
-    cep_env(end-kc+2:end) = cep(end-kc+2:end);   % ne garde que les basses quéfrences
+    cep_env(end-kc+2:end) = cep(end-kc+2:end); 
 
-    env_dB  = real(fft(cep_env));        % enveloppe (dB), fonction de la fréquence
-    fine_dB = Xf_dB - env_dB;            % structure fine = tout le reste (harmoniques)
+    env_dB  = real(fft(cep_env));       
+    fine_dB = Xf_dB - env_dB;            
 
     if ploting_cepstre
         fig = figure(2);
@@ -172,21 +168,23 @@ for trame = 1 : N_trames
         title("Signal temporel départ")
     end
 
-    % --- Compression de l'enveloppe par facteur k ---
+    % Compression enveloppe
     env_half   = env_dB(1:half+1);
     env_half_c = interp1(idx, env_half, idx*k, 'linear');
     env_half_c(isnan(env_half_c)) = env_half(end);
 
-    env_dB_c = [env_half_c, fliplr(env_half_c(2:end-1))];   % symétrie conjuguée (signal réel)
+    env_dB_c = [env_half_c, fliplr(env_half_c(2:end-1))];  
 
-    % --- Recombinaison + reconstruction du spectre ---
+    % Reconstution
     logX_new = env_dB_c + fine_dB;
-    Xf_new   = 10.^(logX_new/20) .* exp(1i * phase_orig);   % magnitude modifiée + phase d'origine
+    Xf_new   = 10.^(logX_new/20) .* exp(1i * phase_orig);  
 
     y = real(ifft(Xf_new));
 
-    % --- Fenêtrage + OLA (reconstruction temporelle) ---
+    % Fentre hannig 2
     yw = y .* w;
+
+    % OLA
     trame_OLA = yw(1 : end/2) + mem_synthese;
     signal_filtre_FFT(ptr : ptr + L - 1) = trame_OLA;
     mem_synthese = yw(end/2+1 : end);
@@ -194,7 +192,7 @@ for trame = 1 : N_trames
     bloc_avant_fft(1:end/2) = bloc_avant_fft(end/2+1:end);
     ptr = ptr + L;
 
-    % --- Affichage optionnel ---
+    % Affichage
     if ploting_cepstre
         Xa2 = 20*log10(abs(fft(yw)) + eps);
         subplot(4,1,3)
@@ -214,10 +212,8 @@ signal_filtre_FFT = signal_filtre_FFT / max(abs(signal_filtre_FFT)) * max(abs(si
 sound(signal_filtre_FFT, Fe);
 pause(5);
  
-%% Compression : sous-échantillonnage + SAW + quantification scalaire uniforme
-% =========================================================
-%    Mise en forme du bruit de quantification (SAW, cf. Annexe C)
-% =========================================================
+%% Quantification
+
 downsample = 3;
 Res_signal_filtre_FFT = decimate(signal_filtre_FFT, downsample);
 Res_signal_filtre_LPC = decimate(signal_filtre_LPC, downsample);
@@ -249,7 +245,7 @@ sound(Sig_synthese, Fe/3)
 % plot(Sig_synthese, 'w')
 % title("Après transformation non-linéaire inverse")
 % 
-%% ===================== Fonctions locales =====================
+%% 
 function [y, ind] = quant_scal_unif(x, val_min, val_max, n_bits)
 
   n_niveaux = 2 ^ n_bits;
