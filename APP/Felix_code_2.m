@@ -8,7 +8,7 @@ sig = sig';
 
 %% Approche LPC
 ploting = false;
-shortcut = false;
+shortcut = true;
 
 clc
 N          = length(sig);
@@ -133,15 +133,21 @@ S_k = fft(signal_downsample);
 Sw_k = S_k.*(abs(S_k.^alpha)./abs(S_k));
 Sw_n = real(ifft(Sw_k));
 
-Swq_n = quant_scal_unif(Sw_n, min(Sw_n), max(Sw_n), 6);
+% figure
+% plot(Sw_n)
 
-figure
-plot(Swq_n)
+Swq_n = quant_scal_unif(Sw_n, min(Sw_n), max(Sw_n), 16);
+
+% figure
+% plot(Swq_n)
 
 Swq_k = fft(Swq_n);
 
 Sq_k = Swq_k.*(abs(Swq_k.^(1/alpha))./abs(Swq_k));
 Sq_n = real(ifft(Sq_k));
+
+% figure
+% plot(Sq_n)
 
 sound(Sq_n, Fe/fctr_down_sample);
 
